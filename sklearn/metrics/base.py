@@ -42,7 +42,7 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
         Target scores, can either be probability estimates of the positive
         class, confidence values, or binary decisions.
 
-    average : string, [None, 'micro', 'macro' (default), 'samples', 'weighted']
+    average : string, [None, 'micro', 'macro' (default), 'multi', 'samples', 'weighted']
         If ``None``, the scores for each class are returned. Otherwise,
         this determines the type of averaging performed on the data:
 
@@ -52,6 +52,9 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
         ``'macro'``:
             Calculate metrics for each label, and find their unweighted
             mean.  This does not take label imbalance into account.
+        ``'multi'``:
+            Calculate metrics for all pairwise combinations of labels. Computes the
+            final multi-class metric based on the Hand-Till algorithm (unweighted mean).
         ``'weighted'``:
             Calculate metrics for each label, and find their average, weighted
             by support (the number of true instances for each label).
@@ -71,13 +74,13 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
         classes.
 
     """
-    average_options = (None, 'micro', 'macro', 'weighted', 'samples')
+    average_options = (None, 'micro', 'macro', 'multi', 'weighted', 'samples')
     if average not in average_options:
         raise ValueError('average has to be one of {0}'
                          ''.format(average_options))
 
     y_type = type_of_target(y_true)
-    if y_type not in ("binary", "multilabel-indicator"):
+    if y_type not in ("binary", "multilabel-indicator", "multiclass"):
         raise ValueError("{0} format is not supported".format(y_type))
 
     if y_type == "binary":
@@ -111,6 +114,20 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
         average_weight = score_weight
         score_weight = None
         not_average_axis = 0
+
+    elif average == 'multi':
+        n_labels = len(np.unique(y_true))
+        pairwise = [p for p in itertools.combinations(xrange(n_labels), 2)]
+        auc_scores_sum = 0
+        for pair in pairwise:
+            ix = np.in1d(y_true.ravel(), [pair[0], pair[1]]).reshape(y_true.shape)
+            y_true_filtered = y_true[np.where(ix)]
+            y_score_filtered = y_score[np.where(ix), [pair[0], pair[1]]]
+            y_true_filtered_01 = [1 if x == pair[0] else 0 for x in y_true_filtered]
+            y_true_filtered_10 = [1 if x == pair[1] else 0 for x in y_true_filtered]
+            auc_scores_sum += (binary_metric(y_true_filtered_01, y_score_filtered) +
+                               binary_metric(y_true_filtered_10, y_score_filtered)) / 2.0
+        return auc_scores_sum * (2.0 / (n_labels * (n_labels - 1.0)))
 
     if y_true.ndim == 1:
         y_true = y_true.reshape((-1, 1))
