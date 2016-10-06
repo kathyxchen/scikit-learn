@@ -184,7 +184,7 @@ def average_precision_score(y_true, y_score, average="macro",
                                  average, sample_weight=sample_weight)
 
 
-def roc_auc_score(y_true, y_score, average="macro", sample_weight=None):
+def roc_auc_score(y_true, y_score, multiclass="ovr", average="macro", sample_weight=None):
     """Compute Area Under the Curve (AUC) from prediction scores
 
     Note: this implementation is restricted to the binary classification task
@@ -202,13 +202,22 @@ def roc_auc_score(y_true, y_score, average="macro", sample_weight=None):
         class, confidence values, or non-thresholded measure of decisions
         (as returned by "decision_function" on some classifiers).
 
+    multiclass : string, ['ovo', 'ovr' (default)]
+        ``'ovo'``:
+            One vs. one: Consider all possible pairwise combination of classes.
+            Considers the uniform distribution of classes when computing
+            the binary AUC of each pair (Hand and Till, 2001).
+        ``'ovr'``:
+            One vs. rest: Consider samples of one class as positive and all other
+            samples as negatives.
+
     average : string, [None, 'micro', 'macro' (default), 'samples', 'weighted']
         If ``None``, the scores for each class are returned. Otherwise,
         this determines the type of averaging performed on the data:
 
         ``'micro'``:
             Calculate metrics globally by considering each element of the label
-            indicator matrix as a label.
+            indicator matrix as a label. Only applicable to binary class ROCs.
         ``'macro'``:
             Calculate metrics for each label, and find their unweighted
             mean.  This does not take label imbalance into account.
@@ -217,6 +226,7 @@ def roc_auc_score(y_true, y_score, average="macro", sample_weight=None):
             by support (the number of true instances for each label).
         ``'samples'``:
             Calculate metrics for each instance, and find their average.
+            Only applicable to binary class ROCs.
 
     sample_weight : array-like of shape = [n_samples], optional
         Sample weights.
@@ -256,8 +266,8 @@ def roc_auc_score(y_true, y_score, average="macro", sample_weight=None):
         return auc(fpr, tpr, reorder=True)
 
     return _average_binary_score(
-        _binary_roc_auc_score, y_true, y_score, average,
-        sample_weight=sample_weight)
+        _binary_roc_auc_score, y_true, y_score,
+        multiclass, average, sample_weight=sample_weight)
 
 
 def _binary_clf_curve(y_true, y_score, pos_label=None, sample_weight=None):

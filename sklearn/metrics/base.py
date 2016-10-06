@@ -14,6 +14,7 @@ Common code for all metrics
 
 from __future__ import division
 
+import itertools
 import numpy as np
 
 from ..utils import check_array, check_consistent_length
@@ -29,8 +30,8 @@ class UndefinedMetricWarning(_UndefinedMetricWarning):
     pass
 
 
-def _average_binary_score(binary_metric, y_true, y_score, average,
-                          sample_weight=None):
+def _average_binary_score(binary_metric, y_true, y_score,
+                          multiclass, average, sample_weight=None):
     """Average a binary metric for multilabel classification
 
     Parameters
@@ -42,6 +43,9 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
         Target scores, can either be probability estimates of the positive
         class, confidence values, or binary decisions.
 
+    multiclass : string ['ovo', 'ovr' (default)]
+        TODO: document.
+
     average : string, [None, 'micro', 'macro' (default), 'multi', 'samples', 'weighted']
         If ``None``, the scores for each class are returned. Otherwise,
         this determines the type of averaging performed on the data:
@@ -52,9 +56,6 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
         ``'macro'``:
             Calculate metrics for each label, and find their unweighted
             mean.  This does not take label imbalance into account.
-        ``'multi'``:
-            Calculate metrics for all pairwise combinations of labels. Computes the
-            final multi-class metric based on the Hand-Till algorithm (unweighted mean).
         ``'weighted'``:
             Calculate metrics for each label, and find their average, weighted
             by support (the number of true instances for each label).
@@ -74,7 +75,7 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
         classes.
 
     """
-    average_options = (None, 'micro', 'macro', 'multi', 'weighted', 'samples')
+    average_options = (None, 'micro', 'macro', 'weighted', 'samples')
     if average not in average_options:
         raise ValueError('average has to be one of {0}'
                          ''.format(average_options))
@@ -82,6 +83,10 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
     y_type = type_of_target(y_true)
     if y_type not in ("binary", "multilabel-indicator", "multiclass"):
         raise ValueError("{0} format is not supported".format(y_type))
+
+    multiclass_options = ("ovo", "ovr")
+    if multiclass not in multiclass_options:
+        raise ValueError("{0} is not supported for multiclass ROC AUC".format(multiclass))
 
     if y_type == "binary":
         return binary_metric(y_true, y_score, sample_weight=sample_weight)
@@ -115,20 +120,6 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
         score_weight = None
         not_average_axis = 0
 
-    elif average == 'multi':
-        n_labels = len(np.unique(y_true))
-        pairwise = [p for p in itertools.combinations(xrange(n_labels), 2)]
-        auc_scores_sum = 0
-        for pair in pairwise:
-            ix = np.in1d(y_true.ravel(), [pair[0], pair[1]]).reshape(y_true.shape)
-            y_true_filtered = y_true[np.where(ix)]
-            y_score_filtered = y_score[np.where(ix), [pair[0], pair[1]]]
-            y_true_filtered_01 = [1 if x == pair[0] else 0 for x in y_true_filtered]
-            y_true_filtered_10 = [1 if x == pair[1] else 0 for x in y_true_filtered]
-            auc_scores_sum += (binary_metric(y_true_filtered_01, y_score_filtered) +
-                               binary_metric(y_true_filtered_10, y_score_filtered)) / 2.0
-        return auc_scores_sum * (2.0 / (n_labels * (n_labels - 1.0)))
-
     if y_true.ndim == 1:
         y_true = y_true.reshape((-1, 1))
 
@@ -137,12 +128,30 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
 
     n_classes = y_score.shape[not_average_axis]
     score = np.zeros((n_classes,))
-    for c in range(n_classes):
-        y_true_c = y_true.take([c], axis=not_average_axis).ravel()
-        y_score_c = y_score.take([c], axis=not_average_axis).ravel()
-        score[c] = binary_metric(y_true_c, y_score_c,
-                                 sample_weight=score_weight)
-
+    if n_classes > 2:
+        if average == "micro" or average == "samples":
+            raise ValueError("Average '{0}' not supported for multiclass ROC AUC".format(average))
+        if multiclass == "ovo":
+            n_labels = len(np.unique(y_true))
+            pairwise = [p for p in itertools.combinations(xrange(n_labels), 2)]
+            auc_scores_sum = 0
+            for pair in pairwise:
+                ix = np.in1d(y_true.ravel(), [pair[0], pair[1]]).reshape(y_true.shape)
+                y_true_filtered = y_true[np.where(ix)]
+                y_score_filtered = y_score[np.where(ix)[1],:][:,[pair[0], pair[1]]]
+                y_true_filtered_01 = [1 if x == pair[0] else 0 for x in y_true_filtered]
+                y_true_filtered_10 = [1 if x == pair[1] else 0 for x in y_true_filtered]
+                auc_scores_sum += (binary_metric(y_true_filtered_01, y_score_filtered[:,0]) +
+                                   binary_metric(y_true_filtered_10, y_score_filtered[:,1])) / 2.0
+            return auc_scores_sum * (2.0 / (n_labels * (n_labels - 1.0)))
+        elif multiclass == "ovr": # currently unimplemented.
+            raise ValueError("Multiclass one-vs.-rest ROC AUC computation not supported.")
+    else:
+        for c in range(n_classes):
+            y_true_c = y_true.take([c], axis=not_average_axis).ravel()
+            y_score_c = y_score.take([c], axis=not_average_axis).ravel()
+            score[c] = binary_metric(y_true_c, y_score_c,
+                                     sample_weight=score_weight)
     # Average the results
     if average is not None:
         return np.average(score, weights=average_weight)

@@ -2,6 +2,7 @@ from __future__ import division, print_function
 
 import numpy as np
 from itertools import product
+import pandas as pd
 import warnings
 from scipy.sparse import csr_matrix
 
@@ -168,13 +169,11 @@ def test_roc_returns_consistency():
     assert_equal(fpr.shape, tpr.shape)
     assert_equal(fpr.shape, thresholds.shape)
 
-
 def test_roc_curve_multi():
     # roc_curve not applicable for multi-class problems
     y_true, _, probas_pred = make_prediction(binary=False)
 
     assert_raises(ValueError, roc_curve, y_true, probas_pred)
-
 
 def test_roc_curve_confidence():
     # roc_curve for confidence scores
@@ -379,6 +378,15 @@ def test_auc_duplicate_values():
     for y in (y1, y2, y3):
         assert_array_almost_equal(auc(x, y, reorder=True), 3.0)
 
+def test_auc_multiclass_hand_till():
+    df = pd.read_csv("/home/kathychen/Documents/mauc-testing/HandTill2001/data/ht01.multipleclass.txt", sep=" ")
+    labels = ["WinF", "WinNF", "Veh", "Con", "Tabl", "Head"]
+    y_true = []
+    y_score = []
+    for row in df.iterrows():
+        y_true.append(labels.index(row[1]["observed"]))
+        y_score.append([row[1]["WinF"], row[1]["WinNF"], row[1]["Veh"], row[1]["Con"], row[1]["Tabl"], row[1]["Head"]])
+    assert_almost_equal(roc_auc_score(np.array(y_true), np.array(y_score), average="multi"), 0.947211794)
 
 def test_auc_errors():
     # Incompatible shapes
@@ -407,9 +415,9 @@ def test_auc_score_non_binary_class():
     assert_raise_message(ValueError, "ROC AUC score is not defined",
                          roc_auc_score, y_true, y_pred)
     # y_true contains three different class values
-    y_true = rng.randint(0, 3, size=10)
-    assert_raise_message(ValueError, "multiclass format is not supported",
-                         roc_auc_score, y_true, y_pred)
+    # y_true = rng.randint(0, 3, size=10)
+    # assert_raise_message(ValueError, "multiclass format is not supported",
+    #                      roc_auc_score, y_true, y_pred)
 
     clean_warning_registry()
     with warnings.catch_warnings(record=True):
@@ -427,9 +435,9 @@ def test_auc_score_non_binary_class():
                              roc_auc_score, y_true, y_pred)
 
         # y_true contains three different class values
-        y_true = rng.randint(0, 3, size=10)
-        assert_raise_message(ValueError, "multiclass format is not supported",
-                             roc_auc_score, y_true, y_pred)
+        # y_true = rng.randint(0, 3, size=10)
+        # assert_raise_message(ValueError, "multiclass format is not supported",
+        #                     roc_auc_score, y_true, y_pred)
 
 
 def test_precision_recall_curve():
