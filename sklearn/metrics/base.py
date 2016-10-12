@@ -43,7 +43,7 @@ def _average_binary_score(binary_metric, y_true, y_score,
         Target scores, can either be probability estimates of the positive
         class, confidence values, or binary decisions.
 
-    multiclass : string ['ovo', 'ovr' (default)]
+    multiclass : string [None, 'ovo', 'ovr' (default)]
         TODO: document.
 
     average : string, [None, 'micro', 'macro' (default), 'multi', 'samples', 'weighted']
@@ -84,7 +84,7 @@ def _average_binary_score(binary_metric, y_true, y_score,
     if y_type not in ("binary", "multilabel-indicator", "multiclass"):
         raise ValueError("{0} format is not supported".format(y_type))
 
-    multiclass_options = ("ovo", "ovr")
+    multiclass_options = (None, "ovo", "ovr")
     if multiclass not in multiclass_options:
         raise ValueError("{0} is not supported for multiclass ROC AUC".format(multiclass))
 
@@ -128,7 +128,7 @@ def _average_binary_score(binary_metric, y_true, y_score,
 
     n_classes = y_score.shape[not_average_axis]
     score = np.zeros((n_classes,))
-    if n_classes > 2:
+    if type_of_target(y_score) == 'multiclass':
         if average == "micro" or average == "samples":
             raise ValueError("Average '{0}' not supported for multiclass ROC AUC".format(average))
         if multiclass == "ovo":
@@ -146,6 +146,8 @@ def _average_binary_score(binary_metric, y_true, y_score,
             return auc_scores_sum * (2.0 / (n_labels * (n_labels - 1.0)))
         elif multiclass == "ovr": # currently unimplemented.
             raise ValueError("Multiclass one-vs.-rest ROC AUC computation not supported.")
+        elif not multiclass:
+            raise ValueError("TODO")
     else:
         for c in range(n_classes):
             y_true_c = y_true.take([c], axis=not_average_axis).ravel()

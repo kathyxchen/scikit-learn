@@ -181,7 +181,7 @@ def average_precision_score(y_true, y_score, average="macro",
         return auc(recall, precision)
 
     return _average_binary_score(_binary_average_precision, y_true, y_score,
-                                 average, sample_weight=sample_weight)
+                                 None, average, sample_weight=sample_weight)
 
 
 def roc_auc_score(y_true, y_score, multiclass="ovr", average="macro", sample_weight=None):
@@ -257,7 +257,7 @@ def roc_auc_score(y_true, y_score, multiclass="ovr", average="macro", sample_wei
 
     """
     def _binary_roc_auc_score(y_true, y_score, sample_weight=None):
-        if len(np.unique(y_true)) != 2:
+        if len(np.unique(y_true)) < 2:
             raise ValueError("Only one class present in y_true. ROC AUC score "
                              "is not defined in that case.")
 

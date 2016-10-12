@@ -2,7 +2,6 @@ from __future__ import division, print_function
 
 import numpy as np
 from itertools import product
-import pandas as pd
 import warnings
 from scipy.sparse import csr_matrix
 
@@ -378,15 +377,19 @@ def test_auc_duplicate_values():
     for y in (y1, y2, y3):
         assert_array_almost_equal(auc(x, y, reorder=True), 3.0)
 
-def test_auc_multiclass_hand_till():
-    df = pd.read_csv("/home/kathychen/Documents/mauc-testing/HandTill2001/data/ht01.multipleclass.txt", sep=" ")
-    labels = ["WinF", "WinNF", "Veh", "Con", "Tabl", "Head"]
-    y_true = []
-    y_score = []
-    for row in df.iterrows():
-        y_true.append(labels.index(row[1]["observed"]))
-        y_score.append([row[1]["WinF"], row[1]["WinNF"], row[1]["Veh"], row[1]["Con"], row[1]["Tabl"], row[1]["Head"]])
-    assert_almost_equal(roc_auc_score(np.array(y_true), np.array(y_score), average="multi"), 0.947211794)
+def test_auc_multi_ovo_toy():
+    y_true = np.array([0, 1, 2])
+    y_scores = np.array([[0.714, 0.072, 0.214], [0.837, 0.143, 0.020], [0.714, 0.072, 0.214]])
+    assert_almost_equal(roc_auc_score(y_true, y_scores, multiclass="ovo"), 0.666666666663)
+
+    y_true = np.array([0, 0, 1, 1])
+    y_scores_binary = np.array([0.1, 0.4, 0.35, 0.8])
+    y_scores_multi = []
+    for y_score in y_scores_binary:
+        y_scores_multi.append([1 - y_score, y_score])
+    y_scores_multi = np.array(y_scores_multi)
+    assert_almost_equal(roc_auc_score(y_true, y_scores_multi, multiclass="ovo"),
+        roc_auc_score(y_true, y_scores_binary))
 
 def test_auc_errors():
     # Incompatible shapes
